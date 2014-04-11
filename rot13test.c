@@ -23,7 +23,7 @@ int main() {
         printf("%02X ", (unsigned char)buf1[i]);
     };
     putchar('\n');
-    rot13_naive(buf1);
+    rot13_naivetable(buf1);
     rot13_simd(buf2);
     for (i = 0; i < 0x1000000; i++) {
         if (!buf1[i]) break;
@@ -43,7 +43,7 @@ int main() {
     double t1, t2, t3;
 
     gettimeofday(&tv1, NULL);
-    for (i = 0; i < 100; i++) rot13_naive(buf1);
+    for (i = 0; i < 100; i++) rot13_naivetable(buf1);
     gettimeofday(&tv2, NULL);
     t1 = tv2.tv_sec - tv1.tv_sec + (tv2.tv_usec - tv1.tv_usec) / 1000000.0;
 
@@ -53,23 +53,23 @@ int main() {
     t2 = tv2.tv_sec - tv1.tv_sec + (tv2.tv_usec - tv1.tv_usec) / 1000000.0;
 
     gettimeofday(&tv1, NULL);
-    for (i = 0; i < 100; i++) rot13_hybrid(buf3);
+    for (i = 0; i < 100; i++) rot13_unrolltable(buf3);
     gettimeofday(&tv2, NULL);
     t3 = tv2.tv_sec - tv1.tv_sec + (tv2.tv_usec - tv1.tv_usec) / 1000000.0;
 
-    printf("1M 100times naive %fsec simd %fsec hybrid %fsec\n", t1, t2, t3);
+    printf("1M 100times naivetable %fsec simd %fsec unrolltable %fsec\n", t1, t2, t3);
 
     for (i = 0; i < 0x100000; i++) hash1 ^= ((uint32_t*) buf1)[i];
     for (i = 0; i < 0x100000; i++) hash2 ^= ((uint32_t*) buf2)[i];
     for (i = 0; i < 0x100000; i++) hash3 ^= ((uint32_t*) buf3)[i];
-    printf("naive %08X simd %08X hybrid %08X\n", hash1, hash2, hash3);
+    printf("naivetable %08X simd %08X unrolltable %08X\n", hash1, hash2, hash3);
 
     static char hw1[64] = "Hello, world! Hello, world! Hello, world!";
     static char hw2[64] = "Hello, world! Hello, world! Hello, world!";
     static char hw3[64] = "Hello, world! Hello, world! Hello, world!";
 
     gettimeofday(&tv1, NULL);
-    for (i = 0; i < 10000001; i++) rot13_naive(hw1+2);
+    for (i = 0; i < 10000001; i++) rot13_naivetable(hw1+2);
     gettimeofday(&tv2, NULL);
     t1 = tv2.tv_sec - tv1.tv_sec + (tv2.tv_usec - tv1.tv_usec) / 1000000.0;
 
@@ -79,11 +79,11 @@ int main() {
     t2 = tv2.tv_sec - tv1.tv_sec + (tv2.tv_usec - tv1.tv_usec) / 1000000.0;
 
     gettimeofday(&tv1, NULL);
-    for (i = 0; i < 10000001; i++) rot13_hybrid(hw3+2);
+    for (i = 0; i < 10000001; i++) rot13_unrolltable(hw3+2);
     gettimeofday(&tv2, NULL);
     t3 = tv2.tv_sec - tv1.tv_sec + (tv2.tv_usec - tv1.tv_usec) / 1000000.0;
 
-    printf("Hello, world!x3[1] 10Mtimes naive %fsec simd %fsec hybrid %fsec\n", t1, t2, t3);
+    printf("Hello, world!x3[1] 10Mtimes naivetable %fsec simd %fsec unrolltable %fsec\n", t1, t2, t3);
     puts(hw1);
     puts(hw2);
     puts(hw3);

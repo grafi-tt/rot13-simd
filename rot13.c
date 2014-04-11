@@ -11,7 +11,7 @@
 #define bsf _bit_scan_forward
 #endif
 
-static const unsigned char rot13_table[256] = {
+static const unsigned char TABLE[256] = {
 /*
 256.times do |i|
   j = i
@@ -42,8 +42,8 @@ end
     0xF0, 0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, 0xFF
 };
 
-void rot13_naive(char *s) {
-    for (; *s; s++) *s = rot13_table[(unsigned char) *s];
+void rot13_naivetable(char *s) {
+    for (; *s; s++) *s = TABLE[(unsigned char) *s];
 }
 
 void rot13_simd(char *s) {
@@ -112,27 +112,10 @@ void rot13_simd(char *s) {
         __m128i xmm_diff_A_Z = _mm_add_epi8(xmm_diff_A_, xmm_diff_Z);
         __m128i xmm_diff_unified = _mm_sub_epi8(xmm_diff_2Mp1, xmm_diff_A_Z);
         __m128i xmm_diff_scaled_p13 = _mm_mullo_epi16(xmm_diff_unified, xmm_const_13_skip);
-        __m128i xmm_diff_scaled = _mm_sub_epi8(xmm_diff_scaled_p13, xmm_const_13);
-
-        //xmm_new = _mm_add_epi8(xmm_origm13, xmm_diff_scaled);
+        xmm_new = _mm_add_epi8(xmm_origm13, xmm_diff_scaled_p13);
 
         if (!all_zero) goto loop_end;
-        uint64_t lo = _mm_cvtsi128_si64(xmm_diff_scaled);
-        xmm_diff_scaled = _mm_srli_si128(xmm_diff_scaled, 8);
-        uint64_t hi = _mm_cvtsi128_si64(xmm_diff_scaled);
-        __atomic_fetch_add((uint64_t*) s, lo, __ATOMIC_RELAXED);
-        __atomic_fetch_add((uint64_t*) s + 1, hi, __ATOMIC_RELAXED);
-
-        //_mm_maskmoveu_si128(xmm_new, xmm_border, s);
-        // xmm_new = _mm_and_si128(xmm_new, xmm_border);
-        // xmm_new = _mm_or_si128(xmm_new, xmm_const_m1);
-        // _mm_store_si128((__m128i*) s, xmm_new);
-
-        /*
-        uint64_t tmp[2];
-        _mm_store_si128((__m128i*)tmp, xmm_border);
-        printf("x %016lx %016lx\n", tmp[1], tmp[0]);
-        */
+        _mm_maskmoveu_si128(xmm_new, xmm_border, s);
     } while (0);
     s += 16;
 
@@ -150,7 +133,7 @@ void rot13_simd(char *s) {
         diff_A_ = c > 'A' - 1 ? -1 : 0
         diff_M = c > 'M' 1 ? -1 : 0
         diff_Z = c > 'Z' 1 ? -1 : 0
-        (c - 13) + ((diff_A_ * 2 + 1) - (diff_M + diff_Z)) * 13
+        (c - 13) + ((diff_M_ * 2 + 1) - (diff_A + diff_Z)) * 13
         comparing is done for singed char, but that doesn't change result
         */
         __m128i xmm_diff_A_ = _mm_cmpgt_epi8(xmm_masked, xmm_const_A_);
@@ -181,18 +164,10 @@ loop_end: ;
 
     xmm_border = _mm_andnot_si128(xmm_zero_vec_extended, xmm_border);
     _mm_maskmoveu_si128(xmm_new, xmm_border, s); // maskmove
-    //xmm_new = _mm_and_si128(xmm_new, xmm_border);
-    //_mm_store_si128((__m128i*) s, xmm_new);
-
-    /*
-    uint64_t tmp[2];
-    _mm_store_si128((__m128i*)tmp, xmm_diff_scaled);
-    printf("x %016lx %016lx\n", tmp[1], tmp[0]);
-    */
 }
 
-void rot13_hybrid(char *s) {
-#define UNROLL1(x) case x: if (!*(s+x)) return; *(s+x) = rot13_table[(unsigned char) *(s+x)];
+void rot13_unrolltable(char *s) {
+#define UNROLL1(x) case x: if (!*(s+x)) return; *(s+x) = TABLE[(unsigned char) *(s+x)];
     unsigned int i = (uintptr_t) s & 15;
     s = s - i;
     switch (i) {
@@ -224,31 +199,31 @@ void rot13_hybrid(char *s) {
         if (zero_vec) break;
 
         uint64_t u = _mm_cvtsi128_si64(xmm);
-        uint64_t v = rot13_table[u & 255];
-        v |= (uint64_t) rot13_table[u >> 8 & 255] << 8;
-        v |= (uint64_t) rot13_table[u >> 16 & 255] << 16;
-        v |= (uint64_t) rot13_table[u >> 24 & 255] << 24;
-        v |= (uint64_t) rot13_table[u >> 32 & 255] << 32;
-        v |= (uint64_t) rot13_table[u >> 40 & 255] << 40;
-        v |= (uint64_t) rot13_table[u >> 48 & 255] << 48;
-        v |= (uint64_t) rot13_table[u >> 56] << 56;
+        uint64_t v = TABLE[u & 255];
+        v |= (uint64_t) TABLE[u >> 8 & 255] << 8;
+        v |= (uint64_t) TABLE[u >> 16 & 255] << 16;
+        v |= (uint64_t) TABLE[u >> 24 & 255] << 24;
+        v |= (uint64_t) TABLE[u >> 32 & 255] << 32;
+        v |= (uint64_t) TABLE[u >> 40 & 255] << 40;
+        v |= (uint64_t) TABLE[u >> 48 & 255] << 48;
+        v |= (uint64_t) TABLE[u >> 56] << 56;
         *(uint64_t*) s = v;
 
         xmm = _mm_srli_si128(xmm, 8);
         u = _mm_cvtsi128_si64(xmm);
-        v = rot13_table[u & 255];
-        v |= (uint64_t) rot13_table[u >> 8 & 255] << 8;
-        v |= (uint64_t) rot13_table[u >> 16 & 255] << 16;
-        v |= (uint64_t) rot13_table[u >> 24 & 255] << 24;
-        v |= (uint64_t) rot13_table[u >> 32 & 255] << 32;
-        v |= (uint64_t) rot13_table[u >> 40 & 255] << 40;
-        v |= (uint64_t) rot13_table[u >> 48 & 255] << 48;
-        v |= (uint64_t) rot13_table[u >> 56] << 56;
+        v = TABLE[u & 255];
+        v |= (uint64_t) TABLE[u >> 8 & 255] << 8;
+        v |= (uint64_t) TABLE[u >> 16 & 255] << 16;
+        v |= (uint64_t) TABLE[u >> 24 & 255] << 24;
+        v |= (uint64_t) TABLE[u >> 32 & 255] << 32;
+        v |= (uint64_t) TABLE[u >> 40 & 255] << 40;
+        v |= (uint64_t) TABLE[u >> 48 & 255] << 48;
+        v |= (uint64_t) TABLE[u >> 56] << 56;
         *((uint64_t*) s + 1) = v;
     }
 
     unsigned int zero_pos = bsf(zero_vec);
-#define UNROLL2(x) case x: *(s+x-1) = rot13_table[(unsigned char) *(s+x-1)];
+#define UNROLL2(x) case x: *(s+x-1) = TABLE[(unsigned char) *(s+x-1)];
     switch (zero_pos) {
     UNROLL2(15)
     UNROLL2(14)
